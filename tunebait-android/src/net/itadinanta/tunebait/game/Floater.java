@@ -15,12 +15,14 @@ public class Floater {
 	private boolean picked;
 	public int index;
 	private MouseJointDef mouseJointDef = new MouseJointDef();
+	private Vector2 bodyAnchor;
 
-	public Floater(float x, float y, Body floaterHandle, Body groundBody) {
+	public Floater(float x, float y, float radius, Body floaterHandle, Body groundBody) {
 		for (int i = 0; i < position.length; ++i) {
 			position[i] = new Vector2(x, y);
 		}
 		this.body = floaterHandle;
+		this.bodyAnchor = new Vector2(radius, 0f);
 		mouseJointDef.bodyA = groundBody;
 		mouseJointDef.bodyB = this.body;
 		mouseJointDef.target.set(position[0]);
@@ -45,7 +47,7 @@ public class Floater {
 		}
 		this.body.setAwake(true);
 		if (joint == null) {
-			mouseJointDef.target.set(position[positionPtr]);
+			mouseJointDef.target.set(body.getWorldPoint(bodyAnchor));
 			joint = (MouseJoint) world.createJoint(mouseJointDef);
 		}
 		else {

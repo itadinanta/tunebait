@@ -30,8 +30,10 @@ import com.badlogic.gdx.physics.box2d.joints.RevoluteJointDef;
 import com.badlogic.gdx.physics.box2d.joints.RopeJointDef;
 
 public class TunebaitGame extends InputAdapter implements ApplicationListener {
-	private static final float FLOATER_RADIUS = 0.5f;
-	private static final float FISH_RADIUS = 0.15f;
+	private static final float FLOATER_RADIUS = 0.75f;
+	private static final float FISH_RADIUS_MIN = 0.075f;
+	private static final float FISH_RADIUS_MAX = 0.150f;
+
 	List<Body> fishList = new ArrayList<Body>();
 	World world = new World(new Vector2(0, 0), true);
 	Box2DDebugRenderer debugRenderer;
@@ -57,8 +59,7 @@ public class TunebaitGame extends InputAdapter implements ApplicationListener {
 			if (picked != null) {
 				floaterIndex[pointer] = picked.index;
 				moveToWindowPosition(picked, x, y, false);
-			}
-			else {
+			} else {
 				fishList.add(createFish(x, y));
 			}
 		}
@@ -76,7 +77,7 @@ public class TunebaitGame extends InputAdapter implements ApplicationListener {
 
 	private Body createFish(int x, int y) {
 		Vector3 newCenter = camera.getPickRay(x, y).getEndPoint(0);
-		float hl = FISH_RADIUS;
+		float hl = MathUtils.random(FISH_RADIUS_MIN, FISH_RADIUS_MAX);
 		BodyDef bodyDef = new BodyDef();
 		bodyDef.type = BodyType.DynamicBody;
 		bodyDef.position.set(newCenter.x, newCenter.y);
@@ -85,17 +86,17 @@ public class TunebaitGame extends InputAdapter implements ApplicationListener {
 
 		CircleShape dynamicCircle = new CircleShape();
 		dynamicCircle.setRadius(hl * 2);
-			
+
 		Body fish = world.createBody(bodyDef);
 		fish.createFixture(dynamicCircle, 0.0002f);
 
 		return fish;
 	}
-	
-	private Vector2 moveToWindowPosition(Floater fish, int x, int y, boolean dragged) {
+
+	private Vector2 moveToWindowPosition(Floater floater, int x, int y, boolean dragged) {
 		Vector3 newCenter = camera.getPickRay(x, y).getEndPoint(0);
-		fish.moveTo(world, newCenter.x, newCenter.y, dragged);
-		return fish.getPosition(0);
+		floater.moveTo(world, newCenter.x, newCenter.y, dragged);
+		return floater.getPosition(0);
 	}
 
 	@Override
@@ -103,27 +104,28 @@ public class TunebaitGame extends InputAdapter implements ApplicationListener {
 		if (pointer < floaterIndex.length && floaterIndex[pointer] >= 0) {
 			Floater floater = this.floaters[floaterIndex[pointer]];
 			floater.release(world);
-//			if (floater.dragged) {
-//				Vector2 c0 = floater.getPosition(0);
-//				Vector2 c1 = floater.getPosition(-1);
-//				Vector2 c2 = floater.getPosition(-2);
-//				Vector2 centerOfMass = floater.body.getPosition();
-//				floater.body.applyLinearImpulse((c0.x - (c1.x + c2.x) / 2.0f) / BOX_STEP, (c0.y - (c1.y + c2.y) / 2.0f) / BOX_STEP,
-//						centerOfMass.x, centerOfMass.y);
-//			} else {
-//				floater.body.applyForceToCenter(0, 0);
-//			}
+			// if (floater.dragged) {
+			// Vector2 c0 = floater.getPosition(0);
+			// Vector2 c1 = floater.getPosition(-1);
+			// Vector2 c2 = floater.getPosition(-2);
+			// Vector2 centerOfMass = floater.body.getPosition();
+			// floater.body.applyLinearImpulse((c0.x - (c1.x + c2.x) / 2.0f) /
+			// BOX_STEP, (c0.y - (c1.y + c2.y) / 2.0f) / BOX_STEP,
+			// centerOfMass.x, centerOfMass.y);
+			// } else {
+			// floater.body.applyForceToCenter(0, 0);
+			// }
 		}
 		floaterIndex[pointer] = -1;
 		return super.touchUp(x, y, pointer, button);
 	}
 
 	public Floater pickFloater(int x, int y) {
-		Vector3 newCenter = camera.getPickRay(x, y).getEndPoint(0);
-		
+		final Vector3 newCenter = camera.getPickRay(x, y).getEndPoint(0);
+
 		float boxWidth = FLOATER_RADIUS;
-		float boxHeight = FLOATER_RADIUS; 
-		
+		float boxHeight = FLOATER_RADIUS;
+
 		float lowerX = newCenter.x - boxWidth;
 		float lowerY = newCenter.y - boxHeight;
 		float upperX = newCenter.x + boxWidth;
@@ -135,7 +137,7 @@ public class TunebaitGame extends InputAdapter implements ApplicationListener {
 			@Override
 			public boolean reportFixture(Fixture fixture) {
 				for (Floater floater : floaters) {
-					if (floater.body == fixture.getBody()) {
+					if (floater.body == fixture.getBody() && fixture.testPoint(newCenter.x, newCenter.y)) {
 						floater.setPicked(true);
 					}
 				}
@@ -180,19 +182,73 @@ public class TunebaitGame extends InputAdapter implements ApplicationListener {
 		camera.viewportWidth = 16f;
 		camera.position.set(0, 0, 0.5f);
 		camera.update();
-		// Ground body
+
 		BodyDef groundBodyDef = new BodyDef();
+		FixtureDef defaultFixtureDef = new FixtureDef();
+		BodyDef defaultBodyDef = new BodyDef();
 
 		Body groundBody = createBox(groundBodyDef, -camera.viewportWidth / 2, -camera.viewportHeight / 2, camera.viewportWidth / 2,
 				camera.viewportHeight / 2, 0.1f);
 
-		float hl = 0.25f;
+		createFloaters(groundBody, defaultFixtureDef, defaultBodyDef);
 
-		// Dynamic BodyF
-		
+		for (int i = 0; i < floaters.length - 1; i++) {
+			createNet(floaters[i].body, floaters[i + 1].body, defaultFixtureDef, defaultBodyDef);
+		}
+
+		debugRenderer = new Box2DDebugRenderer();
+		Gdx.input.setInputProcessor(this);
+	}
+
+	private void createNet(Body head, Body tail, FixtureDef fixtureDef, BodyDef bodyDef) {
+		float hl = 0.25f;
+		PolygonShape smallFloaterShape = new PolygonShape();
+
+		smallFloaterShape.setAsBox(hl, 0.05f);
+		fixtureDef.shape = smallFloaterShape;
+		fixtureDef.density = 0.001f;
+
+		RevoluteJointDef jointDef = new RevoluteJointDef();
+		jointDef.localAnchorA.set(-hl * 1.25f, 0f);
+		jointDef.localAnchorB.set(hl * 1.25f, 0f);
+		jointDef.collideConnected = false;
+
+		bodyDef.type = BodyType.DynamicBody;
+		bodyDef.linearDamping = 5.0f;
+		bodyDef.angularDamping = 5.0f;
+
+		jointDef.bodyB = head;
+		jointDef.localAnchorA.set(-FLOATER_RADIUS, 0f);
+
+		for (int j = 0; j < NUM_SMALLFLOATERS; ++j) {
+			bodyDef.position.set(jointDef.bodyB.getPosition().x, jointDef.bodyB.getPosition().y);
+			Body smallFloater = world.createBody(bodyDef);
+			smallFloater.createFixture(fixtureDef);
+			jointDef.bodyA = jointDef.bodyB;
+			jointDef.bodyB = smallFloater;
+			world.createJoint(jointDef);
+			jointDef.localAnchorA.set(-hl * 1.25f, 0f);
+			jointDef.localAnchorB.set(hl * 1.25f, 0f);
+		}
+
+		jointDef.bodyA = jointDef.bodyB;
+		jointDef.bodyB = tail;
+		jointDef.localAnchorB.set(-FLOATER_RADIUS, 0f);
+		world.createJoint(jointDef);
+
+		RopeJointDef rope = new RopeJointDef();
+		rope.bodyA = head;
+		rope.bodyB = tail;
+		rope.maxLength = (NUM_SMALLFLOATERS + 1) * hl * 2.5f;
+		rope.localAnchorA.set(-FLOATER_RADIUS, 0f);
+		rope.localAnchorB.set(-FLOATER_RADIUS, 0f);
+		rope.collideConnected = true;
+		world.createJoint(rope);
+	}
+
+	private void createFloaters(Body groundBody, FixtureDef fixtureDef, BodyDef bodyDef) {
 		CircleShape dynamicCircle = new CircleShape();
 		dynamicCircle.setRadius(FLOATER_RADIUS);
-		FixtureDef fixtureDef = new FixtureDef();
 		fixtureDef.shape = dynamicCircle;
 		fixtureDef.density = 0.0001f;
 		fixtureDef.friction = 0.0f;
@@ -202,97 +258,44 @@ public class TunebaitGame extends InputAdapter implements ApplicationListener {
 			floaterIndex[i] = -1;
 		}
 
-		BodyDef bodyDef = new BodyDef();
 		bodyDef.type = BodyType.DynamicBody;
 		bodyDef.position.set(camera.viewportWidth / 4, 0);
 		bodyDef.linearDamping = 3.0f;
 		bodyDef.angularDamping = 1.0f;
-		
+
 		for (int i = 0; i < floaters.length; ++i) {
 			Body floaterHandle = world.createBody(bodyDef);
-			floaters[i] = new Floater(bodyDef.position.x, bodyDef.position.y, floaterHandle, groundBody);
+			floaters[i] = new Floater(bodyDef.position.x, bodyDef.position.y, FLOATER_RADIUS, floaterHandle, groundBody);
 			floaters[i].index = i;
 			floaters[i].body = floaterHandle;
 			floaters[i].body.createFixture(fixtureDef);
 			bodyDef.position.rotate(360.0f / floaters.length);
 		}
-
-		PolygonShape smallFloaterShape = new PolygonShape();
-		
-		smallFloaterShape.setAsBox(hl, 0.05f);
-		fixtureDef.shape = smallFloaterShape;
-		fixtureDef.density = 0.001f;
-		
-		RevoluteJointDef jointDef = new RevoluteJointDef();
-		jointDef.localAnchorA.set(-hl * 1.25f, 0f);
-		jointDef.localAnchorB.set(hl * 1.25f, 0f);
-		jointDef.collideConnected = false;
-		
-		bodyDef.type = BodyType.DynamicBody;
-		bodyDef.linearDamping = 5.0f;
-		bodyDef.angularDamping = 5.0f;
-		
-		for (int i = 1; i < floaters.length; ++i) {
-			jointDef.bodyA = jointDef.bodyB;
-			jointDef.bodyB = floaters[i].body;
-			if (jointDef.bodyA != null) {
-				world.createJoint(jointDef);
-			}
-			for (int j = 0; j < NUM_SMALLFLOATERS; ++j) {
-				bodyDef.position.set(jointDef.bodyB.getPosition().x, jointDef.bodyB.getPosition().y);
-				Body smallFloater = world.createBody(bodyDef);
-				smallFloater.createFixture(fixtureDef);
-				jointDef.bodyA = jointDef.bodyB;
-				jointDef.bodyB = smallFloater;
-				world.createJoint(jointDef);
-			}
-		}
-		jointDef.bodyA = jointDef.bodyB;
-		jointDef.bodyB = floaters[0].body;
-		world.createJoint(jointDef);
-
-		RopeJointDef rope = new RopeJointDef();
-		rope.bodyA = floaters[0].body;
-		rope.bodyB = floaters[floaters.length-1].body;
-		rope.maxLength = (NUM_SMALLFLOATERS+1) * hl * 2.5f;
-		rope.localAnchorA.set(Vector2.Zero);
-		rope.localAnchorB.set(Vector2.Zero);
-		rope.collideConnected = true;
-		world.createJoint(rope);
-		
-		debugRenderer = new Box2DDebugRenderer();
-		Gdx.input.setInputProcessor(this);
 	}
 
 	@Override
 	public void dispose() {
 	}
 
-	
 	private Vector2 f = new Vector2();
-	private Vector2 g = new Vector2(1f, 0.0f);
-	public void update() {
+	private Vector2 g = new Vector2(-0.25f, 0.0f);
+
+	public void updateForces() {
 		for (Body body : fishList) {
 			f.set(body.getPosition());
-			float d = f.len();
-//			f.x = MathUtils.cos(d/10);
-//			f.y = MathUtils.sin(d/10);
 			f.nor();
 			f.rotate(135);
 			f.mul(0.0001f);
-			body.applyForceToCenter(f);
-//			f.rotate(90);
-//			body.applyLinearImpulse(f, Vector2.Zero);
+			body.applyForce(f, body.getWorldPoint(g));
 		}
 	}
-	
+
 	@Override
 	public void render() {
 		Gdx.gl.glClear(GL10.GL_COLOR_BUFFER_BIT);
 		debugRenderer.render(world, camera.combined);
-		
-		update();
-		
+
+		updateForces();
 		world.step(BOX_STEP, BOX_VELOCITY_ITERATIONS, BOX_POSITION_ITERATIONS);
 	}
 
