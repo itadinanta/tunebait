@@ -26,9 +26,9 @@ public class Floater {
 		mouseJointDef.bodyA = groundBody;
 		mouseJointDef.bodyB = this.body;
 		mouseJointDef.target.set(position[0]);
-		mouseJointDef.maxForce = 8.0f;
+		mouseJointDef.maxForce = 64.0f;
 		mouseJointDef.frequencyHz = 20.0f;
-		mouseJointDef.dampingRatio = 20.0f;
+		mouseJointDef.dampingRatio = 6.0f;
 	}
 
 	public void moveTo(World world, float x, float y, boolean dragged) {

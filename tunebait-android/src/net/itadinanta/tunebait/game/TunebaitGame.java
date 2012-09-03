@@ -3,8 +3,6 @@ package net.itadinanta.tunebait.game;
 import java.util.ArrayList;
 import java.util.List;
 
-import android.util.FloatMath;
-
 import com.badlogic.gdx.ApplicationListener;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.InputAdapter;
@@ -23,9 +21,6 @@ import com.badlogic.gdx.physics.box2d.FixtureDef;
 import com.badlogic.gdx.physics.box2d.PolygonShape;
 import com.badlogic.gdx.physics.box2d.QueryCallback;
 import com.badlogic.gdx.physics.box2d.World;
-import com.badlogic.gdx.physics.box2d.joints.DistanceJointDef;
-import com.badlogic.gdx.physics.box2d.joints.MouseJoint;
-import com.badlogic.gdx.physics.box2d.joints.MouseJointDef;
 import com.badlogic.gdx.physics.box2d.joints.RevoluteJointDef;
 import com.badlogic.gdx.physics.box2d.joints.RopeJointDef;
 
@@ -46,9 +41,9 @@ public class TunebaitGame extends InputAdapter implements ApplicationListener {
 
 	static final int NUM_FLOATERS = 2;
 	static final int NUM_FINGERS = 5;
-	private static final int NUM_SMALLFLOATERS = 21;
+	private static final int NUM_SMALLFLOATERS = 19;
 
-	Floater[] floaters = new Floater[NUM_FLOATERS];
+	Floater[] floaters;
 	int floaterIndex[] = new int[NUM_FINGERS];
 
 	@Override
@@ -190,17 +185,17 @@ public class TunebaitGame extends InputAdapter implements ApplicationListener {
 		Body groundBody = createBox(groundBodyDef, -camera.viewportWidth / 2, -camera.viewportHeight / 2, camera.viewportWidth / 2,
 				camera.viewportHeight / 2, 0.1f);
 
-		createFloaters(groundBody, defaultFixtureDef, defaultBodyDef);
+		createFloaters(groundBody, NUM_FLOATERS, defaultFixtureDef, defaultBodyDef);
 
 		for (int i = 0; i < floaters.length - 1; i++) {
-			createNet(floaters[i].body, floaters[i + 1].body, defaultFixtureDef, defaultBodyDef);
+			createNet(floaters[i].body, floaters[i + 1].body, NUM_SMALLFLOATERS, defaultFixtureDef, defaultBodyDef);
 		}
 
 		debugRenderer = new Box2DDebugRenderer();
 		Gdx.input.setInputProcessor(this);
 	}
 
-	private void createNet(Body head, Body tail, FixtureDef fixtureDef, BodyDef bodyDef) {
+	private void createNet(Body head, Body tail, int numSmallFloaters, FixtureDef fixtureDef, BodyDef bodyDef) {
 		float hl = 0.25f;
 		PolygonShape smallFloaterShape = new PolygonShape();
 
@@ -220,7 +215,7 @@ public class TunebaitGame extends InputAdapter implements ApplicationListener {
 		jointDef.bodyB = head;
 		jointDef.localAnchorA.set(-FLOATER_RADIUS, 0f);
 
-		for (int j = 0; j < NUM_SMALLFLOATERS; ++j) {
+		for (int j = 0; j < numSmallFloaters; ++j) {
 			bodyDef.position.set(jointDef.bodyB.getPosition().x, jointDef.bodyB.getPosition().y);
 			Body smallFloater = world.createBody(bodyDef);
 			smallFloater.createFixture(fixtureDef);
@@ -239,14 +234,16 @@ public class TunebaitGame extends InputAdapter implements ApplicationListener {
 		RopeJointDef rope = new RopeJointDef();
 		rope.bodyA = head;
 		rope.bodyB = tail;
-		rope.maxLength = (NUM_SMALLFLOATERS + 1) * hl * 2.5f;
+		rope.maxLength = (numSmallFloaters + 1) * hl * 2.5f;
 		rope.localAnchorA.set(-FLOATER_RADIUS, 0f);
 		rope.localAnchorB.set(-FLOATER_RADIUS, 0f);
 		rope.collideConnected = true;
 		world.createJoint(rope);
 	}
 
-	private void createFloaters(Body groundBody, FixtureDef fixtureDef, BodyDef bodyDef) {
+	private void createFloaters(Body groundBody, int numFloaters, FixtureDef fixtureDef, BodyDef bodyDef) {
+		this.floaters = new Floater[numFloaters];
+		
 		CircleShape dynamicCircle = new CircleShape();
 		dynamicCircle.setRadius(FLOATER_RADIUS);
 		fixtureDef.shape = dynamicCircle;
