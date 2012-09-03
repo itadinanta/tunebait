@@ -1,8 +1,10 @@
-package net.itadinanta.tunebait;
+package net.itadinanta.tunebait.game;
 
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.physics.box2d.Body;
+import com.badlogic.gdx.physics.box2d.World;
 import com.badlogic.gdx.physics.box2d.joints.MouseJoint;
+import com.badlogic.gdx.physics.box2d.joints.MouseJointDef;
 
 public class Floater {
 	public boolean dragged;
@@ -12,15 +14,24 @@ public class Floater {
 	public MouseJoint joint;
 	private boolean picked;
 	public int index;
+	private MouseJointDef mouseJointDef = new MouseJointDef();
 
-	public Floater(float x, float y) {
+	public Floater(float x, float y, Body floaterHandle, Body groundBody) {
 		for (int i = 0; i < position.length; ++i) {
 			position[i] = new Vector2(x, y);
 		}
+		this.body = floaterHandle;
+		mouseJointDef.bodyA = groundBody;
+		mouseJointDef.bodyB = this.body;
+		mouseJointDef.target.set(position[0]);
+		mouseJointDef.maxForce = 8.0f;
+		mouseJointDef.frequencyHz = 20.0f;
+		mouseJointDef.dampingRatio = 20.0f;
 	}
 
-	public void moveTo(float x, float y, boolean dragged) {
+	public void moveTo(World world, float x, float y, boolean dragged) {
 		// body.setTransform(x, y, 0);
+
 		if (dragged) {
 			positionPtr = (positionPtr + 1) % position.length;
 			Vector2 p = position[positionPtr];
@@ -33,8 +44,21 @@ public class Floater {
 			}
 		}
 		this.body.setAwake(true);
-		joint.setTarget(position[positionPtr]);
+		if (joint == null) {
+			mouseJointDef.target.set(position[positionPtr]);
+			joint = (MouseJoint) world.createJoint(mouseJointDef);
+		}
+		else {
+			joint.setTarget(position[positionPtr]);
+		}
 		this.dragged = dragged;
+	}
+	
+	public void release(World world) {
+		if (joint != null) {
+			world.destroyJoint(joint);
+			joint = null;
+		}
 	}
 
 	public Vector2 getPosition(int offset) {
@@ -44,7 +68,7 @@ public class Floater {
 	public void setPicked(boolean b) {
 		this.picked = b;
 	}
-	
+
 	public boolean isPicked() {
 		return this.picked;
 	}

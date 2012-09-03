@@ -3,6 +3,8 @@
 	<name>tunebait-desktop</name>
 	<comment></comment>
 	<projects>
+		<project>tunebait</project>
+		<project>tunebait-android</project>
 	</projects>
 	<buildSpec>
 		<buildCommand>

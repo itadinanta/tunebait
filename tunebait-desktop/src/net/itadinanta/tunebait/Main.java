@@ -1,6 +1,6 @@
 package net.itadinanta.tunebait;
 
-import net.itadinanta.tunebait.TunebaitGame;
+import net.itadinanta.tunebait.game.TunebaitGame;
 
 import com.badlogic.gdx.backends.lwjgl.LwjglApplication;
 import com.badlogic.gdx.backends.lwjgl.LwjglApplicationConfiguration;
