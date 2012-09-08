@@ -1,11 +1,14 @@
 package net.itadinanta.tunebait.game;
 
 import java.util.ArrayList;
+import java.util.Deque;
+import java.util.LinkedList;
 import java.util.List;
 
 import com.badlogic.gdx.ApplicationListener;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.InputAdapter;
+import com.badlogic.gdx.audio.Sound;
 import com.badlogic.gdx.graphics.GL10;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.math.MathUtils;
@@ -29,7 +32,8 @@ public class TunebaitGame extends InputAdapter implements ApplicationListener {
 	private static final float FISH_RADIUS_MIN = 0.075f;
 	private static final float FISH_RADIUS_MAX = 0.150f;
 
-	List<Body> fishList = new ArrayList<Body>();
+	Deque<Fish> fishList = new LinkedList<Fish>();
+	
 	World world = new World(new Vector2(0, 0), true);
 	Box2DDebugRenderer debugRenderer;
 	OrthographicCamera camera;
@@ -42,9 +46,18 @@ public class TunebaitGame extends InputAdapter implements ApplicationListener {
 	static final int NUM_FLOATERS = 2;
 	static final int NUM_FINGERS = 5;
 	private static final int NUM_SMALLFLOATERS = 19;
-
+	private static final String NEW_FISH_SAMPLE = "message.ogg";
+	private static final String KILL_FISH_SAMPLE = "drip.ogg";
+	private static final String CATCH_FISH_SAMPLE = "bell.ogg";
+	private static final String DRAGGING_SAMPLE = "sonar.ogg";
+	int frameCount;
+	
 	Floater[] floaters;
 	int floaterIndex[] = new int[NUM_FINGERS];
+	private Sound createFishSound;
+	private Sound killFishSound;
+	private Sound catchFishSound;
+	private Sound dragFloaterSound;
 
 	@Override
 	public boolean touchDown(int x, int y, int pointer, int button) {
@@ -55,7 +68,7 @@ public class TunebaitGame extends InputAdapter implements ApplicationListener {
 				floaterIndex[pointer] = picked.index;
 				moveToWindowPosition(picked, x, y, false);
 			} else {
-				fishList.add(createFish(x, y));
+				fishList.add(new Fish(createFish(x, y), frameCount, 600));
 			}
 		}
 		return super.touchDown(x, y, pointer, button);
@@ -85,6 +98,8 @@ public class TunebaitGame extends InputAdapter implements ApplicationListener {
 		Body fish = world.createBody(bodyDef);
 		fish.createFixture(dynamicCircle, 0.0002f);
 
+		createFishSound.play();
+		
 		return fish;
 	}
 
@@ -99,17 +114,7 @@ public class TunebaitGame extends InputAdapter implements ApplicationListener {
 		if (pointer < floaterIndex.length && floaterIndex[pointer] >= 0) {
 			Floater floater = this.floaters[floaterIndex[pointer]];
 			floater.release(world);
-			// if (floater.dragged) {
-			// Vector2 c0 = floater.getPosition(0);
-			// Vector2 c1 = floater.getPosition(-1);
-			// Vector2 c2 = floater.getPosition(-2);
-			// Vector2 centerOfMass = floater.body.getPosition();
-			// floater.body.applyLinearImpulse((c0.x - (c1.x + c2.x) / 2.0f) /
-			// BOX_STEP, (c0.y - (c1.y + c2.y) / 2.0f) / BOX_STEP,
-			// centerOfMass.x, centerOfMass.y);
-			// } else {
-			// floater.body.applyForceToCenter(0, 0);
-			// }
+			dragFloaterSound.stop(floater.soundId);
 		}
 		floaterIndex[pointer] = -1;
 		return super.touchUp(x, y, pointer, button);
@@ -141,6 +146,7 @@ public class TunebaitGame extends InputAdapter implements ApplicationListener {
 		}, lowerX, lowerY, upperX, upperY);
 		for (Floater floater : floaters) {
 			if (floater.isPicked()) {
+				floater.soundId = dragFloaterSound.play();
 				return floater;
 			}
 		}
@@ -191,8 +197,17 @@ public class TunebaitGame extends InputAdapter implements ApplicationListener {
 			createNet(floaters[i].body, floaters[i + 1].body, NUM_SMALLFLOATERS, defaultFixtureDef, defaultBodyDef);
 		}
 
+		initAudio();
+		
 		debugRenderer = new Box2DDebugRenderer();
 		Gdx.input.setInputProcessor(this);
+	}
+
+	private void initAudio() {
+		createFishSound = Gdx.audio.newSound(Gdx.files.internal( NEW_FISH_SAMPLE ));
+		killFishSound = Gdx.audio.newSound(Gdx.files.internal( KILL_FISH_SAMPLE ));
+		catchFishSound = Gdx.audio.newSound(Gdx.files.internal( CATCH_FISH_SAMPLE ));
+		dragFloaterSound = Gdx.audio.newSound(Gdx.files.internal( DRAGGING_SAMPLE ));
 	}
 
 	private void createNet(Body head, Body tail, int numSmallFloaters, FixtureDef fixtureDef, BodyDef bodyDef) {
@@ -277,8 +292,22 @@ public class TunebaitGame extends InputAdapter implements ApplicationListener {
 	private Vector2 f = new Vector2();
 	private Vector2 g = new Vector2(-0.25f, 0.0f);
 
+	public void killFish() {
+		int count = 0;
+		while (!fishList.isEmpty() && fishList.getFirst().getTtl(frameCount) <=0) {
+			Fish fish = fishList.removeFirst();
+			world.destroyBody(fish.body);
+			count++;
+		}
+		if (count != 0) {
+			killFishSound.play();
+		}
+	}
+	
 	public void updateForces() {
-		for (Body body : fishList) {
+		Body body;
+		for (Fish fish : fishList) {
+			body = fish.body;
 			f.set(body.getPosition());
 			f.nor();
 			f.rotate(135);
@@ -287,13 +316,19 @@ public class TunebaitGame extends InputAdapter implements ApplicationListener {
 		}
 	}
 
+	public void update() {
+		killFish();
+		updateForces();
+		world.step(BOX_STEP, BOX_VELOCITY_ITERATIONS, BOX_POSITION_ITERATIONS);
+		++frameCount;
+	}
+	
 	@Override
 	public void render() {
 		Gdx.gl.glClear(GL10.GL_COLOR_BUFFER_BIT);
 		debugRenderer.render(world, camera.combined);
 
-		updateForces();
-		world.step(BOX_STEP, BOX_VELOCITY_ITERATIONS, BOX_POSITION_ITERATIONS);
+		update();
 	}
 
 	@Override

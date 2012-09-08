@@ -16,6 +16,7 @@ public class Floater {
 	public int index;
 	private MouseJointDef mouseJointDef = new MouseJointDef();
 	private Vector2 bodyAnchor;
+	public long soundId;
 
 	public Floater(float x, float y, float radius, Body floaterHandle, Body groundBody) {
 		for (int i = 0; i < position.length; ++i) {
